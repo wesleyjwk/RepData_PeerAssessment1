@@ -1,25 +1,149 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research - Course Project 1"
+author: "Wesley Klabbers"
+date: "3 June 2016"
+output: html_document
 ---
 
+This document provides a step-by-step approach to conduct Course Project 1 of Coursera's Reproducible Research Course.
 
-## Loading and preprocessing the data
+### Reading and Formatting the Dataset
 
+The following chunk of code reads in a dataset that contains one individual's 
+movements in terms of steps taken
+for a period of 2 months on a 5-minute interval basis. Should the dataset 
+already exist, it will not be read in again.
 
+```{r, echo = TRUE}
+if (!exists("activity")){
+    data <- read.csv("activity.csv")
+}
+```
 
-## What is mean total number of steps taken per day?
+### What is the mean total number of steps taken per day?
 
+In order to answer this question we want to have a more useful aggregation of 
+the data. At this moment there are multiple records for the same 
+day (due to the 5 minute intervals), which is not tidy. The following chunk of 
+code aggregates this to a daily measure, while excluding all missing data.
+```{r, echo = TRUE}
+dailyaggregate <- aggregate(steps ~ date, data = data, sum, na.rm = TRUE)
+```
 
+Subsequently we want to visualize the daily totals in a histogram.
+```{r, echo = TRUE}
+hist(x = dailyaggregate$steps, col = "red", breaks = 20, 
+     xlab = "Daily Total of Steps Taken", ylab = "Frequencÿ",
+     main = "Frequencies of the Daily Total Steps Taken")
+```
 
-## What is the average daily activity pattern?
+Lastly, we want to know the mean and median of the total number of steps taken 
+per day.
+```{r, echo = TRUE}
+meansteps <- mean(dailyaggregate$steps, na.rm = TRUE)
+mediansteps <- median(dailyaggregate$steps, na.rm = TRUE)
+meansteps
+mediansteps
+```
 
+### What is the average daily activity pattern?
 
+In order to find the average daily activity pattern we first need to create a 
+new aggregation, this time based on interval rather than date.
+```{r, echo = TRUE}
+intervalaggregate <- aggregate(steps ~ interval, data = data, mean, 
+                               na.rm = TRUE)
+```
 
-## Imputing missing values
+Now we can again create a plot to visualize the average steps taken per 
+interval.
+```{r, echo = TRUE}
+plot(intervalaggregate$interval, intervalaggregate$steps, type = "l",
+     col = "red", lwd = 1.5,
+     xlab = "Interval", ylab = "Average Steps Taken",
+     main = "Average Daily Steps Taken per Five Minute Interval")
+```
 
+Additionally, we want to find out which interval has the maximum number of 
+steps.
+```{r, echo = TRUE}
+intervalaggregate[which.max(intervalaggregate$steps),]
+```
 
+### Imputing Missing Values
+Some days and/or intervals have missing values indicated by "NA". This may 
+introduce unwanted bias into our analyses. We have to carefully consider these 
+NA's and check what we can do with them.
 
-## Are there differences in activity patterns between weekdays and weekends?
+First, it is a good idea to get an idea of how many NAs there are in the 
+dataset.
+```{r, echo = TRUE}
+sum(is.na(data$steps))
+```
+
+One can make very sophisticated calculations when it comes to these missing 
+values. However, to keep it simple, we will impute missing values based on the 
+mean for the specific 5-minute interval.
+```{r, echo = TRUE}
+fixdata <- data
+missingdata <- is.na(fixdata$steps)
+meaninterval <- tapply(fixdata$steps, fixdata$interval, mean, na.rm = TRUE,
+                       simplify = TRUE)
+fixdata$steps[missingdata] <- meaninterval[as.character(fixdata$interval[missingdata])]
+```
+
+One must check whether the imputing procedure has been done correctly.
+```{r, echo = TRUE}
+sum(is.na(fixdata$steps))
+```
+
+Now lets re-visualize the results, this time with the imputed values in place.
+```{r, echo = TRUE}
+newdailyaggregate <- aggregate(steps ~ date, data = fixdata, sum, na.rm = TRUE)
+hist(x = newdailyaggregate$steps, col = "red", breaks = 20, 
+     xlab = "Daily Total of Steps Taken", ylab = "Frequencÿ",
+     main = "Frequencies of the Daily Total Steps Taken")
+```
+
+Lets also compare the new median and mean
+```{r, echo = TRUE}
+newmeansteps <- mean(newdailyaggregate$steps, na.rm = TRUE)
+newmediansteps <- median(newdailyaggregate$steps, na.rm = TRUE)
+newmeansteps
+newmediansteps
+```
+
+In essence, by imputing missing values based on the average of the 5-minute
+interval periods led to a change in the median of the total number of steps 
+taken per day. It now equals the mean, which was not the case before.
+
+### Are there differences in activity patterns between weekdays and weekends?
+First off, we have to ascertain which dates are weekdays and which are weekends.
+To do this, lets first convert the data variable to an actual data field.
+```{r, echo = TRUE}
+fixdata$date <- as.POSIXlt(data$date, format = "%Y-%m-%d")
+```
+
+Moreover, lets create variables indicating whether the date is a weekend or not.
+```{r, echo = TRUE}
+fixdata$day <- weekdays(fixdata$date)
+fixdata$weekend <- as.factor(ifelse(fixdata$day == "Saturday" | fixdata$day == "Sunday", "Weekend", "Weekday"))
+```
+
+Making differences in activity patterns visible can be done in many ways. The 
+easiest way would again be a plot.
+```{r, echo = TRUE}
+library(ggplot2)
+newintervalaggregate <- aggregate(steps ~ weekend + interval, data = fixdata, 
+                                  mean, na.rm = TRUE)
+finplot <- ggplot(newintervalaggregate, aes(x = interval, y = steps, 
+                                            color = weekend)) + 
+                                            geom_line() + 
+                                            facet_wrap( ~ weekend, ncol = 1, 
+                                                        nrow = 2)
+print(finplot)
+```
+
+Judging from the plots, one can state that weekday activities 
+start earlier. Moreover, in the weekends there is a higher level of activity 
+during the day than is the case for weekdays.
